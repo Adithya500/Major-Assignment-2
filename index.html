@@ -1,204 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="./libs/d3.js"></script>
-    <script src="libs/d3jstopojson.v1.js"></script>
-    <title>MA Map</title>
-    <style>
-        #tooltip {
-            position: absolute;
-            opacity: 0;
-            top: 0;
-            left: 0;
-            width: auto;
-            padding: 10px;
-            background: white;
-            font-family: sans-serif;
-            font-size: medium;
-            border-radius: 2px;
-            line-height: 1;
-        }
-        
-        path {
-            stroke-width: .5px;
-            stroke: black
-        }
-        
-        path:hover {
-            opacity: .6;
-            stroke: black;
-            stroke-width: 4px;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Massachusetts Geospatial Visualization</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
 
-        .container{
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
+    h1 {
+      margin-top: 20px;
+      text-align: center;
+    }
 
-    </style>
+    h3 {
+      margin-top: 0;
+      color: #444;
+      text-align: center;
+    }
 
+    .map-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 90%;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    svg {
+      width: 90%;
+      height: 400px;
+      margin: 10px 0 40px 0;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    path {
+      stroke: #fff;
+      stroke-width: 0.5px;
+    }
+
+    path:hover {
+      stroke: #000;
+      stroke-width: 2px;
+      opacity: 0.8;
+    }
+
+    #tooltip {
+      position: absolute;
+      opacity: 0;
+      background: white;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 14px;
+      pointer-events: none;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+
+    .line-chart {
+      width: 150px;
+      height: 60px;
+    }
+  </style>
 </head>
 
 <body>
-    <div id="tooltip"></div>
-    <div class="container">
-        <!-- Title goes here -->
-        <!-- Name goes here -->
-        <div class="fig1"></div>
-        <div class="fig2"></div>
+  <h1>Massachusetts Geospatial Visualization</h1>
+  <h3>Your Name Here</h3>
 
+  <div class="map-container">
+    <h2>MAP A: Population in 1980</h2>
+    <svg id="mapA"></svg>
 
-    </div>
+    <h2>MAP B: Population Change (1980–2010)</h2>
+    <svg id="mapB"></svg>
 
-    <script>
-        /*-------------------------------------------------------*/
-        /*------------------- Window setting --------------------*/
-        /*-------------------------------------------------------*/
-        // dimension of the page
-        const window_dims = {
-            width: window.innerWidth,
-            height: window.innerHeight
-        };
+    <h2>MAP C: Gini Index (2010–2019)</h2>
+    <svg id="mapC"></svg>
+  </div>
 
+  <div id="tooltip"></div>
 
-        const svgWidth = window_dims.width/2;
-        const svgHeight = window_dims.width/3;
-        // Append an SVG element to body, then append a path for the boundaries
+  <script>
+    const tooltip = d3.select("#tooltip");
 
+    const width = 900, height = 400;
 
+    const colorA = d3.scaleSequential(d3.interpolateBlues);
+    const colorB = d3.scaleDiverging([-0.5, 0, 0.5], d3.interpolateRdBu);
+    const colorC = d3.scaleSequential(d3.interpolatePlasma);
 
-        /*-------------------------------------------------------*/
-        /*-----------------parallel load data--------------------*/
-        /*-------------------------------------------------------*/
+    const projection = d3.geoMercator().scale(14000).center([-71.8, 42.1]);
+    const path = d3.geoPath().projection(projection);
 
-        // a topojson file containing population of each town in different years
-        const MA_counties = "./data/towns.topojson"
-            // gini index per county
-        const gini_index = "./data/gini_index.csv"
+    Promise.all([
+      d3.json("data/towns.topojson"),
+      d3.csv("data/town_population.csv"),
+      d3.csv("data/gini_index.csv")
+    ]).then(([topology, popData, giniData]) => {
 
+      const geojsonTowns = topojson.feature(topology, topology.objects.ma);
+      const popMap = new Map(popData.map(d => [d.TOWN, d]));
+      const giniMap = new Map(giniData.map(d => [d.county, d]));
 
+      geojsonTowns.features.forEach(d => {
+        const info = popMap.get(d.properties.TOWN);
+        if (info) {
+          d.properties.pop1980 = +info.pop1980;
+          d.properties.pop2010 = +info.pop2010;
+          d.properties.change = (d.properties.pop2010 - d.properties.pop1980) / d.properties.pop1980;
+        }
+      });
 
-        // open both files
-        Promise.all([
-            d3.json(MA_counties),
-            d3.csv(gini_index)
-        ]).then(data =>
-        {
-            // topology data
-            const topology_data = data[0];
-            // gini index data
-            const csv_data = data[1];
+      const counties = Array.from(
+        d3.group(giniData, d => d.county),
+        ([county, records]) => ({ county, records })
+      );
 
-            const generateMap1 = (topo_data,containerName,width,height,margin=30)=> {
-                const svg = d3.select(containerName).append("svg")
-                    .attr("width", width)
-                    .attr("height", height);
-
-            /*-------------------------------------------------------*/
-            /*-----------------Topojson data handling----------------*/
-            /*-------------------------------------------------------*/
-            // if topojson file is imported we need to 
-            // convert topology data to geojson 
-            const geojson = topojson.feature(topo_data, topo_data.objects.ma);
-
-            /*-------------------------------------------------------*/
-            /*----------------------Projections----------------------*/
-            /*-------------------------------------------------------*/
-            const projections = [
-                d3.geoAzimuthalEqualArea(), //Azimuthal projections project the sphere directly onto a plane.
-                d3.geoAlbersUsa(), // USA conic projection
-                d3.geoAlbers(), // equal-area conic projection
-                d3.geoMercator(), // cylindrical projection
-                d3.geoNaturalEarth1(), // pseudocylindrical projection designed by Tom Patterson
-                d3.geoEqualEarth(), // Equal Earth projection, by Bojan Šavrič et al., 2018.
-                d3.geoConicEqualArea(), //equal-area conic projection
-                d3.geoEquirectangular(), //Cylindrical Projections
-                d3.geoOrthographic()
-            ]
-            /*-------------------------------------------------------*/
-            /*----------------geoPath generator----------------------*/
-            /*-------------------------------------------------------*/
-
-            const geoPath_generator = d3.geoPath()
-                .projection(projections[3].fitSize([width-margin,height-margin], geojson))
-            /*-------------------------------------------------------*/
-            /*----------------------Color Scaling--------------------*/
-            /*-------------------------------------------------------*/
-            //https://observablehq.com/@d3/working-with-color
-            //https://colorbrewer2.org/#type=diverging&scheme=RdYlBu&n=6
-            const colorInterpolator = d3.interpolateRgbBasis(['#d73027','#fc8d59','#fee090','#e0f3f8','#91bfdb','#4575b4'].reverse())
-                // if the data is scaled using log scale
-            const logScale = d3.scaleLog()
-                .domain(d3.extent(geojson.features, (d) => {
-                    return d['properties']['POP2010']
-                }))
-            // if the data is scaled using linear scale
-            const linearScale = d3.scaleLinear()
-                .domain(d3.extent(geojson.features, (d) => {
-                    return d['properties']['POP2010']
-                }))
-            /*-------------------------------------------------------*/
-            /*---------------------- Tooltip ------------------------*/
-            /*-------------------------------------------------------*/
-            const tooltip = d3.select("#tooltip");
-            /*--------------------------------------------------------*/
-            /*----------------- channelling marks --------------------*/
-            /*--------------------------------------------------------*/
-
-            svg.selectAll("path")
-                .data(geojson.features)
-                .enter()
-                .append("path")
-                .attr("d", d => geoPath_generator(d))
-                //.attr("fill", d => colorInterpolator(logScale(d['properties']['POP2010'])))
-                .attr("fill", d => colorInterpolator(linearScale(d['properties']['POP2010'])))
-                .on("mouseenter", (m, d) => {
-                    tooltip.transition()
-                        .duration(200)
-                        .style("opacity", .9)
-                    tooltip.html(d['properties']['TOWN'])
-                        .style("left", m.clientX + "px")
-                        .style("top", m.clientY + "px");
-                })
-                .on("mousemove", (m, d) => {
-                    tooltip.style("opacity", .9)
-                })
-                .on("mouseout", (m, d) => {
-                    tooltip.transition()
-                        .duration(400)
-                        .style("opacity", 0)
-                })
-
-            }
-            generateMap1(topology_data,".fig1",svgWidth,svgHeight)
+      // MAP A
+      const svgA = d3.select("#mapA");
+      const popExtent = d3.extent(geojsonTowns.features, d => d.properties.pop1980);
+      colorA.domain(popExtent);
+      svgA.selectAll("path")
+        .data(geojsonTowns.features)
+        .join("path")
+        .attr("d", path)
+        .attr("fill", d => colorA(d.properties.pop1980))
+        .on("mouseenter", (e, d) => {
+          d3.select(e.target).attr("stroke-width", 3);
+          d3.select("#mapB").selectAll("path")
+            .filter(dd => dd.properties.TOWN === d.properties.TOWN)
+            .attr("stroke-width", 3)
+            .attr("stroke", "black");
+          tooltip.style("opacity", 1)
+            .html(`<b>${d.properties.TOWN}</b><br>Population 1980: ${d.properties.pop1980.toLocaleString()}`)
+            .style("left", (e.pageX + 10) + "px")
+            .style("top", (e.pageY - 28) + "px");
         })
-
-
-
-
-        app.get('/api/books/:isbn', (req,resp) => {
-            // use mongoose to retrieve all books from Mongo
-            Book.find({isbn10: req.params.isbn},
-                function(err, data) {
-                    if (err) {
-                        resp.json({ message: 'Book not found' });
-                    } else {
-                        resp.json(data);
-                    }
-                });
+        .on("mouseleave", (e, d) => {
+          d3.select(e.target).attr("stroke-width", 0.5);
+          d3.select("#mapB").selectAll("path").attr("stroke-width", 0.5);
+          tooltip.style("opacity", 0);
         });
 
+      // MAP B
+      const svgB = d3.select("#mapB");
+      const changeExtent = d3.extent(geojsonTowns.features, d => d.properties.change);
+      colorB.domain(changeExtent);
+      svgB.selectAll("path")
+        .data(geojsonTowns.features)
+        .join("path")
+        .attr("d", path)
+        .attr("fill", d => colorB(d.properties.change))
+        .on("mouseenter", (e, d) => {
+          d3.select(e.target).attr("stroke-width", 3);
+          d3.select("#mapA").selectAll("path")
+            .filter(dd => dd.properties.TOWN === d.properties.TOWN)
+            .attr("stroke-width", 3)
+            .attr("stroke", "black");
+          tooltip.style("opacity", 1)
+            .html(`<b>${d.properties.TOWN}</b><br>Change 1980–2010: ${(d.properties.change * 100).toFixed(1)}%`)
+            .style("left", (e.pageX + 10) + "px")
+            .style("top", (e.pageY - 28) + "px");
+        })
+        .on("mouseleave", (e, d) => {
+          d3.select(e.target).attr("stroke-width", 0.5);
+          d3.select("#mapA").selectAll("path").attr("stroke-width", 0.5);
+          tooltip.style("opacity", 0);
+        });
 
+      // MAP C — Gini Index
+      const svgC = d3.select("#mapC");
+      const geojsonCounties = topojson.feature(topology, topology.objects.ma_counties);
+      const giniExtent = d3.extent(giniData, d => +d.gini);
+      colorC.domain(giniExtent);
 
+      svgC.selectAll("path")
+        .data(geojsonCounties.features)
+        .join("path")
+        .attr("d", path)
+        .attr("fill", d => {
+          const info = giniMap.get(d.properties.county);
+          return info ? colorC(+info.gini) : "#ccc";
+        })
+        .on("mouseenter", (e, d) => {
+          const records = giniData.filter(g => g.county === d.properties.county);
+          tooltip.transition().style("opacity", 1);
 
-    </script>
+          tooltip.html(`<b>${d.properties.county}</b><br>Gini 2019: ${(+records[records.length-1].gini).toFixed(3)}<br>
+            <svg class="line-chart"></svg>`)
+            .style("left", (e.pageX + 10) + "px")
+            .style("top", (e.pageY - 28) + "px");
+
+          const chartSVG = tooltip.select(".line-chart");
+          const chartW = 150, chartH = 60;
+          const x = d3.scaleLinear()
+            .domain(d3.extent(records, r => +r.year))
+            .range([10, chartW - 10]);
+          const y = d3.scaleLinear()
+            .domain(d3.extent(records, r => +r.gini))
+            .range([chartH - 10, 10]);
+          const line = d3.line()
+            .x(r => x(+r.year))
+            .y(r => y(+r.gini));
+          chartSVG
+            .attr("width", chartW)
+            .attr("height", chartH)
+            .append("path")
+            .datum(records)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 2)
+            .attr("d", line);
+        })
+        .on("mouseleave", () => tooltip.transition().style("opacity", 0));
+
+    });
+  </script>
 </body>
-
 </html>
