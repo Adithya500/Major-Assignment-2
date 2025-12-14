@@ -4,19 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MA Population & Gini Maps</title>
+
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3"></script>
+
 <style>
-body { font-family: sans-serif; text-align: center; }
-.container { display:flex; flex-direction: column; align-items:center; }
-svg { margin: 20px 0; border:1px solid #ccc; }
-#tooltip {
-  position: absolute; opacity:0; background:white; padding:10px;
-  border:1px solid #aaa; pointer-events:none; font-size:12px;
+body {
+  font-family: sans-serif;
+  text-align: center;
 }
-path:hover { opacity:0.7; stroke:black; stroke-width:2px; }
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+svg {
+  margin: 20px 0;
+  border: 1px solid #ccc;
+}
+
+#tooltip {
+  position: absolute;
+  opacity: 0;
+  background: white;
+  padding: 8px;
+  border: 1px solid #aaa;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+path:hover {
+  opacity: 0.7;
+  stroke: black;
+  stroke-width: 2px;
+}
 </style>
 </head>
+
 <body>
 
 <h1>Massachusetts Maps</h1>
@@ -33,78 +59,154 @@ path:hover { opacity:0.7; stroke:black; stroke-width:2px; }
 const width = 600, height = 400;
 const tooltip = d3.select("#tooltip");
 
-  
 Promise.all([
   d3.json("./data/towns.topojson"),
   d3.csv("./data/gini_index.csv")
 ]).then(([topoData, giniData]) => {
+
   const towns = topojson.feature(topoData, topoData.objects.ma).features;
 
-  
-  const svgA = d3.select("#mapA").append("svg").attr("width",width).attr("height",height);
-  const maxPop = d3.max(towns, d=>d.properties.POP1980);
-  const colorA = d3.scaleSequential(d3.interpolateBlues).domain([0, maxPop*0.8]);
-  const projection = d3.geoMercator().fitSize([width,height], topojson.feature(topoData, topoData.objects.ma));
+  const projection = d3.geoMercator()
+    .fitSize([width, height], topojson.feature(topoData, topoData.objects.ma));
+
   const path = d3.geoPath().projection(projection);
 
-  svgA.selectAll("path").data(towns).join("path")
-      .attr("d", path)
-      .attr("fill", d=>colorA(d.properties.POP1980))
-      .on("mouseenter", (event,d)=> {
-          tooltip.style("opacity",1).html(`<strong>${d.properties.TOWN}</strong><br>Pop1980: ${d.properties.POP1980}`)
-                 .style("left",(event.pageX+10)+"px")
-                 .style("top",(event.pageY-40)+"px");
-      }).on("mouseleave",()=>tooltip.style("opacity",0));
+  /* ---------- MAP A: POPULATION 1980 ---------- */
+  const svgA = d3.select("#mapA").append("svg")
+    .attr("width", width)
+    .attr("height", height);
 
-  
-  const svgB = d3.select("#mapB").append("svg").attr("width",width).attr("height",height);
-  const change = towns.map(d=>d.properties.POP2010 - d.properties.POP1980);
-  const colorB = d3.scaleSequential(d3.interpolateRdYlGn).domain(d3.extent(change));
+  const maxPop = d3.max(towns, d => d.properties.POP1980);
 
-  svgB.selectAll("path").data(towns).join("path")
-      .attr("d", path)
-      .attr("fill", d=>colorB(d.properties.POP2010 - d.properties.POP1980))
-      .on("mouseenter", (event,d)=> {
-          const val = d.properties.POP2010 - d.properties.POP1980;
-          tooltip.style("opacity",1).html(`<strong>${d.properties.TOWN}</strong><br>Change: ${val}`)
-                 .style("left",(event.pageX+10)+"px")
-                 .style("top",(event.pageY-40)+"px");
-      }).on("mouseleave",()=>tooltip.style("opacity",0));
+  const colorA = d3.scaleSequential(d3.interpolateBlues)
+    .domain([0, maxPop * 0.8]);
 
-  
-  const svgC = d3.select("#mapC").append("svg").attr("width",width).attr("height",height);
+  svgA.selectAll("path")
+    .data(towns)
+    .join("path")
+    .attr("d", path)
+    .attr("fill", d => colorA(d.properties.POP1980))
+    .on("mouseenter", (event, d) => {
+      tooltip.style("opacity", 1)
+        .html(`<strong>${d.properties.TOWN}</strong><br>Pop 1980: ${d.properties.POP1980}`)
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 40) + "px");
+    })
+    .on("mouseleave", () => tooltip.style("opacity", 0));
+
+  /* ---------- MAP B: POPULATION CHANGE ---------- */
+  const svgB = d3.select("#mapB").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  const change = towns.map(d => d.properties.POP2010 - d.properties.POP1980);
+
+  const colorB = d3.scaleSequential(d3.interpolateRdYlGn)
+    .domain(d3.extent(change));
+
+  svgB.selectAll("path")
+    .data(towns)
+    .join("path")
+    .attr("d", path)
+    .attr("fill", d => colorB(d.properties.POP2010 - d.properties.POP1980))
+    .on("mouseenter", (event, d) => {
+      const val = d.properties.POP2010 - d.properties.POP1980;
+      tooltip.style("opacity", 1)
+        .html(`<strong>${d.properties.TOWN}</strong><br>Change: ${val}`)
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 40) + "px");
+    })
+    .on("mouseleave", () => tooltip.style("opacity", 0));
+
+  /* ---------- MAP C: GINI + TOOLTIP CHART ---------- */
+  const svgC = d3.select("#mapC").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
   const giniByFIPS = new Map();
-  giniData.forEach(d => giniByFIPS.set(+d.id.slice(-5), +d["Estimate!!Gini Index"]));
-  const colorC = d3.scaleSequential(d3.interpolateOranges)
-                   .domain(d3.extent(giniData, d=>+d["Estimate!!Gini Index"]));
+  giniData.forEach(d => {
+    giniByFIPS.set(+d.id.slice(-5), +d["Estimate!!Gini Index"]);
+  });
 
-  svgC.selectAll("path").data(towns).join("path")
-      .attr("d", path)
-      .attr("fill", d=> {
-        const g = giniByFIPS.get(d.properties.FIPS_STCO);
-        return g ? colorC(g) : "#ccc";
-      })
-      .on("mouseenter",(event,d)=>{
-        const fips = d.properties.FIPS_STCO;
-        const countyGini = giniData.filter(g=>+g.id.slice(-5)===fips).sort((a,b)=>+a.year - +b.year);
-        tooltip.style("opacity",1)
-               .style("left",(event.pageX+10)+"px")
-               .style("top",(event.pageY-160)+"px")
-               .html(`<strong>${d.properties.TOWN}</strong><br>County Gini over time`);
-        
-        tooltip.selectAll("svg").remove();
-        if(countyGini.length>0){
-          const w=150,h=80,margin={top:5,right:5,bottom:20,left:30};
-          const svgTip = tooltip.append("svg").attr("width",w+margin.left+margin.right).attr("height",h+margin.top+margin.bottom)
-                                .append("g").attr("transform",`translate(${margin.left},${margin.top})`);
-          const x = d3.scaleLinear().domain(d3.extent(countyGini,d=>+d.year)).range([0,w]);
-          const y = d3.scaleLinear().domain([0,d3.max(countyGini,d=>+d["Estimate!!Gini Index"])]).range([h,0]);
-          const lineGen = d3.line().x(d=>x(+d.year)).y(d=>y(+d["Estimate!!Gini Index"]));
-          svgTip.append("path").datum(countyGini).attr("d",lineGen).attr("stroke","steelblue").attr("fill","none").attr("stroke-width",1.5);
-        }
-      }).on("mousemove", event => tooltip.style("left",(event.pageX+10)+"px").style("top",(event.pageY-160)+"px"))
-        .on("mouseleave",()=>tooltip.style("opacity",0).html(""));
+  const colorC = d3.scaleSequential(d3.interpolateOranges)
+    .domain(d3.extent(giniData, d => +d["Estimate!!Gini Index"]));
+
+  svgC.selectAll("path")
+    .data(towns)
+    .join("path")
+    .attr("d", path)
+    .attr("fill", d => {
+      const g = giniByFIPS.get(d.properties.FIPS_STCO);
+      return g ? colorC(g) : "#ccc";
+    })
+    .on("mouseenter", (event, d) => {
+
+      const fips = d.properties.FIPS_STCO;
+      const countyGini = giniData
+        .filter(g => +g.id.slice(-5) === fips)
+        .sort((a, b) => +a.year - +b.year);
+
+      tooltip.style("opacity", 1)
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 170) + "px")
+        .html(`<strong>${d.properties.TOWN}</strong><br>County Gini Index`);
+
+      tooltip.selectAll("svg").remove();
+
+      if (countyGini.length > 0) {
+
+        const w = 160, h = 90;
+        const margin = { top: 5, right: 5, bottom: 25, left: 35 };
+
+        const svgTip = tooltip.append("svg")
+          .attr("width", w + margin.left + margin.right)
+          .attr("height", h + margin.top + margin.bottom)
+          .append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scaleLinear()
+          .domain(d3.extent(countyGini, d => +d.year))
+          .range([0, w]);
+
+        const y = d3.scaleLinear()
+          .domain([
+            d3.min(countyGini, d => +d["Estimate!!Gini Index"]) * 0.95,
+            d3.max(countyGini, d => +d["Estimate!!Gini Index"])
+          ])
+          .range([h, 0]);
+
+        /* AXES */
+        svgTip.append("g")
+          .attr("transform", `translate(0,${h})`)
+          .call(d3.axisBottom(x).ticks(4).tickFormat(d3.format("d")))
+          .selectAll("text")
+          .style("font-size", "8px");
+
+        svgTip.append("g")
+          .call(d3.axisLeft(y).ticks(4))
+          .selectAll("text")
+          .style("font-size", "8px");
+
+        /* LINE */
+        const lineGen = d3.line()
+          .x(d => x(+d.year))
+          .y(d => y(+d["Estimate!!Gini Index"]));
+
+        svgTip.append("path")
+          .datum(countyGini)
+          .attr("d", lineGen)
+          .attr("stroke", "steelblue")
+          .attr("fill", "none")
+          .attr("stroke-width", 1.5);
+      }
+    })
+    .on("mousemove", event => {
+      tooltip.style("left", (event.pageX + 10) + "px")
+             .style("top", (event.pageY - 170) + "px");
+    })
+    .on("mouseleave", () => tooltip.style("opacity", 0).html(""));
 });
 </script>
+
 </body>
 </html>
